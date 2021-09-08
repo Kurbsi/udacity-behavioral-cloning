@@ -26,6 +26,15 @@ The goals / steps of this project are the following:
 [image6]: ./examples/placeholder_small.png "Normal Image"
 [image7]: ./examples/placeholder_small.png "Flipped Image"
 
+[image8]: ./examples/center.jpg "Normal Image"
+[image9]: ./examples/left.jpg "Left Image"
+[image10]: ./examples/right.jpg "Right Image"
+[image11]: ./examples/recover.jpg "Recover Image"
+[image12]: ./examples/regular.jpg "Regular Image"
+[image13]: ./examples/flipped.jpg "Flipped Image"
+
+
+
 ## Rubric Points
 ### Here I will consider the [rubric points](https://review.udacity.com/#!/rubrics/432/view) individually and describe how I addressed each point in my implementation.  
 
@@ -54,76 +63,63 @@ The model.py file contains the code for training and saving the convolution neur
 
 #### 1. An appropriate model architecture has been employed
 
-My model consists of a convolution neural network with 3x3 filter sizes and depths between 32 and 128 (model.py lines 18-24) 
+My approach on creating a valid and working model was two-folded. I started with the preporcessing of the images and used a model which only consists of one Flatten layer and an additional Dense layer with one output. The input shape is a 160x320x3 image and the outpout represents the steering angle. Training data for the first tests only consists of the center image and the steering angle.
 
-The model includes RELU layers to introduce nonlinearity (code line 20), and the data is normalized in the model using a Keras lambda layer (code line 18). 
+With this approach I gather a basic training set and made sure the general pipeline is working. The pipeline in general was working, but of course the car did not stay on the track for a second.
+
+The first approach to improve the result was to add also the left and right camera images provided by the simulator. The simulator overs three images. A center image, which where the windshield is. This camera is also fed in the autonomous mode to the model to calculate the appropriate steering angle. In addition there are also left and right camera images. These are slightly offset to the center image. Using these camera can greatly improve the result when the car is slightly of the center. To compensate the camera offset for the training set, a correction offset to the steering angle needs to be added. For left and right a correction factor of +0.2 and -0.2 respectively was added.
+
+![alt text][image8]
+![alt text][image9]
+![alt text][image10]
+
+In the next step I tried to increase the available data for training with the already exisiting data. Especially for the first, easy track the the data is very biased towards steering to the left, since the track is a closed counter-clockwise running loop. To compensate the bias all images are additionally flipped and added to the training set. The appropriate steering angle was inverted and also added to the training set.
+
+![alt text][image12]
+![alt text][image13]
+
+One additional step in preprocessing was to mean center and normalize the images. Since this also has to be applied when using the model, this was done already as part of Keras model. The Keras framework offers a Lambda layer where every pixel was divided by 255.0 and mean centered by substracting 0.5. Anther preprocessing step done already in the Keras model was cropping the top and the bottom of the image by 50 px and 20 px respectively. For this purpose the Cropping2D layer was used.
+
+With this training set even with only one Dense layer the car could be kept on the street for a short period, although the car was very slow and weaved left and right pretty heavily.
+
+My final model is based on the model from Nvidia shown in the lecture. As said the first two "layers" of the model are the Lambda layer and the Cropping2D layer. After that the model consists of 5 Convolution2D layers with increasing filters of 24, 36, 48 and 64 for both of the last two layers. The first three Convolution2D layers have a stride of 2x2 and the last two layers have strides of 1x1. All layers have a relu activation layer, which conveniently can already be passed in the Keras Conv2D layer.
+
+After that the data is flatten and passed through four regular Dense (fully connected) layer. The output shape decreases from 100 to 50 to 10 to 1, to finally receive the steering angle.
+
+One addition which was added to the original model was three Dropout layers to compensate overfitting. The first dropout layer as added after the first Conv2D layer with a probability of 0.2, the second and third Dropout layer where added after the flattening the data and after the first Dense layer, each with a probility of 0.5 of dropping input units.
+
+Following a overview of the model:
+
+| Layer  		| Description  				|
+|---|---|
+|Input			| 160x320x3 RGB image 		|
+|Lambda			| mean center and normalize |
+|Cropping2D		| output 90x320x3 			|
+|Conv2D			| 24 filter, 5x5 kernel size,  2x2 strides, relu activation, output 43x158x24	|
+|Dropout		| drop 0.2 of input units	|
+|Conv2D			| 36 filter, 5x5 kernel size,  2x2 strides, relu activation, output 20x77x36	|
+|Conv2D			| 48 filter, 5x5 kernel size,  2x2 strides, relu activation, output 8x37x48		|
+|Conv2D			| 64 filter, 3x3 kernel size,  1x1 strides, relu activation, output 6x35x64		|
+|Conv2D			| 64 filter, 3x3 kernel size,  1x1 strides, relu activation, output 4x33x64		|
+|Flatten 		| output 8448 |
+|Dropout		| drop 0.5 of input units |
+|Dense			| output 100 |
+|Dropout		| drop 0.5 of input units |
+|Dense			| output 50 |
+|Dense			| output 10 |
+|Dense			| output 1 	|
+
+As far as the loss went, I used mean squared error, as the problem of steering angle is akin to a regression problem. Also the Adam optimizer was use, therefore no need of fine tune the learning rate.
 
 #### 2. Attempts to reduce overfitting in the model
 
-The model contains dropout layers in order to reduce overfitting (model.py lines 21). 
-
-The model was trained and validated on different data sets to ensure that the model was not overfitting (code line 10-16). The model was tested by running it through the simulator and ensuring that the vehicle could stay on the track.
+As mentioned dropout layers where added to the original model, although in the end these layers did not greatly improve the rather high validation loss compared to the training loss. Still the model performed on both tracks well enough. This can be seen in the videos [1](easy.mp4) [2](hard.mp4). 
 
 #### 3. Model parameter tuning
 
-The model used an adam optimizer, so the learning rate was not tuned manually (model.py line 25).
+The model used an adam optimizer, so the learning rate was not tuned manually.
 
 #### 4. Appropriate training data
 
-Training data was chosen to keep the vehicle driving on the road. I used a combination of center lane driving, recovering from the left and right sides of the road ... 
+Training data was chosen to keep the vehicle driving on the road. I used a combination of center lane driving, recovering from the left and right sides of the road. I started with two counter-clockwise laps and on clockwise lape on the easy track. I then also gather short snippets of me recovering onto the road. This was already enough to drive the easy lap autonomously. To also master the harder track I also recorded one lap counter-clockwise and clockwise on this track. This enabled the car already to drive most of the hard track, but had some trouble in harder section like in the beginning where to lanes are visible. The car had the tendency to steer on the opposite lane. This could be mitigated by recording a couple of short sequences from this part of the track. 
 
-For details about how I created the training data, see the next section. 
-
-### Model Architecture and Training Strategy
-
-#### 1. Solution Design Approach
-
-The overall strategy for deriving a model architecture was to ...
-
-My first step was to use a convolution neural network model similar to the ... I thought this model might be appropriate because ...
-
-In order to gauge how well the model was working, I split my image and steering angle data into a training and validation set. I found that my first model had a low mean squared error on the training set but a high mean squared error on the validation set. This implied that the model was overfitting. 
-
-To combat the overfitting, I modified the model so that ...
-
-Then I ... 
-
-The final step was to run the simulator to see how well the car was driving around track one. There were a few spots where the vehicle fell off the track... to improve the driving behavior in these cases, I ....
-
-At the end of the process, the vehicle is able to drive autonomously around the track without leaving the road.
-
-#### 2. Final Model Architecture
-
-The final model architecture (model.py lines 18-24) consisted of a convolution neural network with the following layers and layer sizes ...
-
-Here is a visualization of the architecture (note: visualizing the architecture is optional according to the project rubric)
-
-![alt text][image1]
-
-#### 3. Creation of the Training Set & Training Process
-
-To capture good driving behavior, I first recorded two laps on track one using center lane driving. Here is an example image of center lane driving:
-
-![alt text][image2]
-
-I then recorded the vehicle recovering from the left side and right sides of the road back to center so that the vehicle would learn to .... These images show what a recovery looks like starting from ... :
-
-![alt text][image3]
-![alt text][image4]
-![alt text][image5]
-
-Then I repeated this process on track two in order to get more data points.
-
-To augment the data sat, I also flipped images and angles thinking that this would ... For example, here is an image that has then been flipped:
-
-![alt text][image6]
-![alt text][image7]
-
-Etc ....
-
-After the collection process, I had X number of data points. I then preprocessed this data by ...
-
-
-I finally randomly shuffled the data set and put Y% of the data into a validation set. 
-
-I used this training data for training the model. The validation set helped determine if the model was over or under fitting. The ideal number of epochs was Z as evidenced by ... I used an adam optimizer so that manually training the learning rate wasn't necessary.
